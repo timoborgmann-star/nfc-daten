@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>Datensatz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f172a;
+      --surface:   #1e293b;
+      --surface2:  #263348;
+      --border:    #334155;
+      --accent:    #38bdf8;
+      --accent2:   #0ea5e9;
+      --green:     #4ade80;
+      --amber:     #fbbf24;
+      --red:       #f87171;
+      --text:      #f1f5f9;
+      --muted:     #94a3b8;
+      --mono:      'DM Mono', monospace;
+      --sans:      'Syne', sans-serif;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 0 0 3rem;
+    }
+
+    /* ── NFC Scan Header ── */
+    .scan-bar {
+      width: 100%;
+      background: linear-gradient(90deg, #0c4a6e, #0f172a);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nfc-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .scan-bar-text {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+      opacity: 0.85;
+    }
+
+    .scan-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-left: auto;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── Main Container ── */
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 1.5rem 1.25rem;
+    }
+
+    /* ── Loading State ── */
+    #state-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 4rem 0;
+      gap: 1.25rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Error State ── */
+    #state-error {
+      display: none;
+      background: #1c1010;
+      border: 1px solid #4b1818;
+      border-left: 3px solid var(--red);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-top: 1.5rem;
+    }
+
+    .error-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--red);
+      margin-bottom: 0.5rem;
+    }
+
+    .error-msg {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── Card ── */
+    #state-data {
+      display: none;
+    }
+
+    .card-header {
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .record-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .record-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .record-name {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .record-id {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+
+    /* ── Fields ── */
+    .fields {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      animation: fadeUp 0.4s 0.1s ease both;
+    }
+
+    .field {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.85rem 1.1rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem;
+      transition: background 0.15s;
+    }
+
+    .field:last-child { border-bottom: none; }
+    .field:hover { background: var(--surface2); }
+
+    .field-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .field-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: right;
+      word-break: break-word;
+    }
+
+    /* ── Status Badge ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px 3px 7px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .badge-green  { background: rgba(74,222,128,0.12); color: var(--green); }
+    .badge-green::before  { background: var(--green); }
+    .badge-amber  { background: rgba(251,191,36,0.12); color: var(--amber); }
+    .badge-amber::before  { background: var(--amber); }
+    .badge-red    { background: rgba(248,113,113,0.12); color: var(--red); }
+    .badge-red::before    { background: var(--red); }
+    .badge-blue   { background: rgba(56,189,248,0.12); color: var(--accent); }
+    .badge-blue::before   { background: var(--accent); }
+
+    /* ── Timestamp ── */
+    .timestamp {
+      margin-top: 1rem;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      animation: fadeUp 0.4s 0.2s ease both;
+    }
+
+    /* ── Extra fields box (all remaining columns) ── */
+    .extra-fields {
+      margin-top: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      animation: fadeUp 0.4s 0.15s ease both;
+    }
+
+    .extra-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.6rem 1.1rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+
+    /* ── Not found ── */
+    #state-notfound {
+      display: none;
+      text-align: center;
+      padding: 3rem 1rem;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .notfound-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+
+    .notfound-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .notfound-sub {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── No ID state ── */
+    #state-noid {
+      display: none;
+      margin-top: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .noid-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--amber);
+      margin-bottom: 0.75rem;
+    }
+
+    .noid-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .noid-url {
+      margin-top: 0.75rem;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 0.6rem 0.75rem;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 2rem;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: #374151;
+      text-align: center;
+      letter-spacing: 0.06em;
+      animation: fadeUp 0.4s 0.25s ease both;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NFC Scan Indicator -->
+  <div class="scan-bar">
+    <svg class="nfc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" color="#38bdf8">
+      <path d="M8.5 5C6 6.5 4 9 4 12s2 5.5 4.5 7"/>
+      <path d="M10.5 8.5C9 9.5 8 10.7 8 12s1 2.5 2.5 3.5"/>
+      <path d="M15.5 5C18 6.5 20 9 20 12s-2 5.5-4.5 7"/>
+      <path d="M13.5 8.5C15 9.5 16 10.7 16 12s-1 2.5-2.5 3.5"/>
+      <circle cx="12" cy="12" r="1.5" fill="#38bdf8" stroke="none"/>
+    </svg>
+    <span class="scan-bar-text">NFC TAG ERKANNT</span>
+    <div class="scan-dot"></div>
+  </div>
+
+  <div class="container">
+
+    <!-- Loading -->
+    <div id="state-loading">
+      <div class="spinner"></div>
+      <div class="loading-text">DATENSATZ WIRD GELADEN...</div>
+    </div>
+
+    <!-- Error -->
+    <div id="state-error">
+      <div class="error-title">Verbindungsfehler</div>
+      <div class="error-msg" id="error-msg">Daten konnten nicht geladen werden.</div>
+    </div>
+
+    <!-- No ID in URL -->
+    <div id="state-noid">
+      <div class="noid-title">Keine Datensatz-ID angegeben</div>
+      <div class="noid-text">
+        Diese Seite erwartet eine ID als URL-Parameter.<br>
+        Beispiel für einen korrekt programmierten NFC-Tag:
+      </div>
+      <div class="noid-url" id="example-url"></div>
+      <div class="noid-text" style="margin-top:0.75rem;">
+        Stelle sicher, dass der NFC-Tag mit der richtigen URL beschrieben ist.
+      </div>
+    </div>
+
+    <!-- Not Found -->
+    <div id="state-notfound">
+      <div class="notfound-icon">◎</div>
+      <div class="notfound-title">Kein Datensatz gefunden</div>
+      <div class="notfound-sub" id="notfound-sub">ID nicht in der Tabelle vorhanden.</div>
+    </div>
+
+    <!-- Data Card -->
+    <div id="state-data">
+      <div class="card-header">
+        <div class="record-label" id="record-label">DATENSATZ</div>
+        <div class="record-name" id="record-name">—</div>
+        <div class="record-id" id="record-id"></div>
+      </div>
+
+      <div class="fields" id="fields-main"></div>
+      <div id="extra-container"></div>
+
+      <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <div class="footer">POWERED BY GOOGLE SHEETS &nbsp;·&nbsp; NFC DATENSYSTEM</div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════
+    //  KONFIGURATION – hier anpassen!
+    // ═══════════════════════════════════════════════════
+    const CONFIG = {
+      // Deine Google Sheets ID (zwischen /d/ und /edit in der URL):
+      SHEET_ID: 11G6S77WakfCV149o0zr8HTfa8Ppux172ca3yiIrqQhE,
+
+      // Spaltenname, der als Titel/Name angezeigt wird (Spalte B = Index 1):
+      NAME_COLUMN: 1,
+
+      // Spalte mit der ID (Spalte A = Index 0):
+      ID_COLUMN: 0,
+
+      // Spalten, die im Haupt-Card angezeigt werden (Indizes, 0-basiert):
+      // Beispiel: [2,3,4,5,6] zeigt Spalten C bis G
+      MAIN_COLUMNS: [2, 3, 4, 5, 6],
+
+      // Spalten, die im zusätzlichen Bereich angezeigt werden (leer = keine):
+      EXTRA_COLUMNS: [7],
+
+      // Status-Spalte (Index) und Wörter für automatisches Badge-Färben:
+      STATUS_COLUMN: 6,
+      STATUS_MAP: {
+        "verfügbar":      "green",
+        "available":      "green",
+        "ok":             "green",
+        "aktiv":          "green",
+        "niedrig":        "amber",
+        "low":            "amber",
+        "achtung":        "amber",
+        "nicht vorrätig": "red",
+        "leer":           "red",
+        "defekt":         "red",
+        "inaktiv":        "red",
+        "out of stock":   "red",
+        "info":           "blue",
+      }
+    };
+    // ═══════════════════════════════════════════════════
+
+    function show(id) {
+      ["state-loading","state-error","state-noid","state-notfound","state-data"]
+        .forEach(s => document.getElementById(s).style.display = s === id ? "block" : "none");
+    }
+
+    function getBadgeClass(value) {
+      const v = (value || "").toLowerCase().trim();
+      for (const [key, cls] of Object.entries(CONFIG.STATUS_MAP)) {
+        if (v.includes(key)) return "badge badge-" + cls;
+      }
+      return null;
+    }
+
+    function makeField(label, value, colIndex) {
+      const row = document.createElement("div");
+      row.className = "field";
+
+      const lbl = document.createElement("span");
+      lbl.className = "field-label";
+      lbl.textContent = label;
+
+      const val = document.createElement("span");
+      val.className = "field-value";
+
+      if (colIndex === CONFIG.STATUS_COLUMN) {
+        const badgeCls = getBadgeClass(value);
+        if (badgeCls) {
+          const badge = document.createElement("span");
+          badge.className = badgeCls;
+          badge.textContent = value;
+          val.appendChild(badge);
+        } else {
+          val.textContent = value || "—";
+        }
+      } else {
+        val.textContent = value || "—";
+      }
+
+      row.appendChild(lbl);
+      row.appendChild(val);
+      return row;
+    }
+
+    async function loadData() {
+      const params = new URLSearchParams(location.search);
+      const id = params.get("id");
+
+      if (!id) {
+        document.getElementById("example-url").textContent =
+          location.origin + location.pathname + "?id=1";
+        show("state-noid");
+        return;
+      }
+
+      if (CONFIG.SHEET_ID === "DEINE-TABELLEN-ID-HIER-EINTRAGEN") {
+        document.getElementById("error-msg").textContent =
+          "Konfiguration fehlt: Bitte trage deine Google Sheets ID in der index.html ein.\n" +
+          "(Suche nach DEINE-TABELLEN-ID-HIER-EINTRAGEN)";
+        show("state-error");
+        return;
+      }
+
+      const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json`;
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+
+        // Google wraps response: google.visualization.Query.setResponse({...});
+        const jsonStr = text.slice(47, -2);
+        const json = JSON.parse(jsonStr);
+        const table = json.table;
+        const headers = table.cols.map(c => c.label || "");
+        const rows = table.rows;
+
+        // Find matching row
+        const row = rows.find(r => {
+          const cellVal = r.c[CONFIG.ID_COLUMN];
+          return cellVal && String(cellVal.v) === String(id);
+        });
+
+        if (!row) {
+          document.getElementById("notfound-sub").textContent =
+            `ID "${id}" wurde in der Tabelle nicht gefunden.`;
+          show("state-notfound");
+          return;
+        }
+
+        const getValue = (i) => {
+          const cell = row.c[i];
+          if (!cell || cell.v === null || cell.v === undefined) return "";
+          return cell.f || String(cell.v);
+        };
+
+        // Header
+        document.getElementById("record-label").textContent = "DATENSATZ · ID " + id;
+        document.getElementById("record-name").textContent = getValue(CONFIG.NAME_COLUMN) || "Kein Name";
+        document.getElementById("record-id").textContent = headers[CONFIG.ID_COLUMN] + ": " + id;
+
+        // Main fields
+        const fieldsMain = document.getElementById("fields-main");
+        fieldsMain.innerHTML = "";
+        CONFIG.MAIN_COLUMNS.forEach(i => {
+          if (i < headers.length) {
+            fieldsMain.appendChild(makeField(headers[i], getValue(i), i));
+          }
+        });
+
+        // Extra fields
+        const extraContainer = document.getElementById("extra-container");
+        extraContainer.innerHTML = "";
+        const extraCols = CONFIG.EXTRA_COLUMNS.filter(i => i < headers.length && getValue(i));
+        if (extraCols.length > 0) {
+          const box = document.createElement("div");
+          box.className = "extra-fields";
+          const title = document.createElement("div");
+          title.className = "extra-title";
+          title.textContent = "Weitere Informationen";
+          box.appendChild(title);
+          extraCols.forEach(i => {
+            box.appendChild(makeField(headers[i], getValue(i), i));
+          });
+          extraContainer.appendChild(box);
+        }
+
+        // Timestamp
+        const now = new Date();
+        document.getElementById("timestamp").textContent =
+          "Abgerufen am " + now.toLocaleDateString("de-DE") +
+          " um " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+        show("state-data");
+
+      } catch (err) {
+        document.getElementById("error-msg").textContent =
+          "Fehler beim Laden der Daten:\n" + err.message +
+          "\n\nMögliche Ursachen:\n" +
+          "• Tabellen-ID falsch eingetragen\n" +
+          "• Tabelle nicht öffentlich freigegeben\n" +
+          "• Kein Internet verfügbar";
+        show("state-error");
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
