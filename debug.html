@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFC Debug</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f172a; color: #f1f5f9; font-family: monospace; padding: 1.5rem; }
+    h1 { font-size: 1.1rem; color: #38bdf8; margin-bottom: 1.5rem; letter-spacing: 0.05em; }
+    .step { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+    .step-title { font-size: 13px; font-weight: bold; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; }
+    .icon { font-size: 16px; }
+    .output { font-size: 12px; line-height: 1.7; color: #94a3b8; white-space: pre-wrap; word-break: break-all; margin-top: 0.5rem; }
+    .ok    { color: #4ade80; }
+    .warn  { color: #fbbf24; }
+    .err   { color: #f87171; }
+    input  { width: 100%; background: #0f172a; border: 1px solid #475569; border-radius: 6px; padding: 0.5rem 0.75rem; color: #f1f5f9; font-size: 13px; font-family: monospace; margin-top: 0.5rem; }
+    button { margin-top: 1rem; background: #0ea5e9; color: white; border: none; border-radius: 8px; padding: 0.6rem 1.5rem; font-size: 14px; font-weight: bold; cursor: pointer; width: 100%; }
+    button:hover { background: #38bdf8; }
+    .raw { background: #0a0f1a; border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem; font-size: 11px; color: #64748b; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    label { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+<h1>🔧 NFC DIAGNOSE-TOOL</h1>
+
+<div class="step">
+  <div class="step-title"><span class="icon">1️⃣</span> Deine Tabellen-ID eingeben</div>
+  <label>Kopiere die ID aus deiner Google Sheets URL (der Teil zwischen /d/ und /edit):</label>
+  <input id="sheetId" placeholder="z.B. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" />
+  <label style="margin-top:0.75rem;display:block;">Test-ID (Datensatznummer die geladen werden soll):</label>
+  <input id="testId" placeholder="z.B. 1" value="1" />
+  <button onclick="runDiagnose()">▶ DIAGNOSE STARTEN</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+async function runDiagnose() {
+  const sheetId = document.getElementById("sheetId").value.trim();
+  const testId  = document.getElementById("testId").value.trim();
+  const out = document.getElementById("results");
+  out.innerHTML = "";
+
+  if (!sheetId) {
+    out.innerHTML = '<div class="step"><div class="output err">❌ Bitte zuerst die Tabellen-ID eingeben.</div></div>';
+    return;
+  }
+
+  // ── Schritt 1: URL-Format prüfen ──
+  addStep(out, "2️⃣", "URL-Format prüfen", "");
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`;
+  setStep(out, "2️⃣", `URL die abgerufen wird:\n${url}`, "ok");
+
+  // ── Schritt 2: Fetch ──
+  addStep(out, "3️⃣", "Verbindung zu Google Sheets herstellen...", "");
+  let text;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      setStep(out, "3️⃣", `❌ HTTP-Fehler: ${res.status} ${res.statusText}\n\nMögliche Ursache:\n• Tabellen-ID falsch\n• Tabelle existiert nicht`, "err");
+      return;
+    }
+    text = await res.text();
+    setStep(out, "3️⃣", `✅ Verbindung erfolgreich (${text.length} Zeichen empfangen)`, "ok");
+  } catch (e) {
+    setStep(out, "3️⃣", `❌ Netzwerkfehler: ${e.message}\n\nMögliche Ursache:\n• Kein Internet\n• CORS-Problem (passiert auf GitHub Pages nicht)`, "err");
+    return;
+  }
+
+  // ── Schritt 3: Rohantwort prüfen ──
+  addStep(out, "4️⃣", "Rohantwort von Google analysieren", "");
+  const preview = text.slice(0, 300);
+  const stepEl = addRawStep(out, "4️⃣", "Erste 300 Zeichen der Antwort:", preview);
+
+  if (text.includes("google.visualization.Query.setResponse")) {
+    setStep(out, "4️⃣", `✅ Antwort enthält erwartetes Format\n\nErste 300 Zeichen:`, "ok", preview);
+  } else if (text.includes("html") || text.includes("<!DOCTYPE")) {
+    setStep(out, "4️⃣", `❌ Google gibt eine HTML-Seite zurück statt JSON!\n\nDas bedeutet:\n• Die Tabelle ist NICHT öffentlich freigegeben, ODER\n• Die Tabellen-ID ist falsch\n\nLösung: Anleitung Schritt 2 wiederholen (Freigabe + Im Web veröffentlichen)`, "err", preview);
+    return;
+  } else {
+    setStep(out, "4️⃣", `⚠️ Unbekanntes Format – erste 300 Zeichen:`, "warn", preview);
+  }
+
+  // ── Schritt 4: JSON parsen ──
+  addStep(out, "5️⃣", "JSON parsen...", "");
+  let json;
+  try {
+    const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)\s*;?\s*$/);
+    if (!match) throw new Error("Regex hat keinen Match gefunden.\n\nAnfang der Antwort:\n" + text.slice(0, 150));
+    json = JSON.parse(match[1]);
+    setStep(out, "5️⃣", `✅ JSON erfolgreich geparst`, "ok");
+  } catch (e) {
+    setStep(out, "5️⃣", `❌ JSON-Parse-Fehler: ${e.message}`, "err");
+    return;
+  }
+
+  // ── Schritt 5: Tabellenstruktur ──
+  addStep(out, "6️⃣", "Tabellenstruktur prüfen...", "");
+  if (!json.table) {
+    setStep(out, "6️⃣", `❌ Kein "table"-Objekt in der Antwort\nStatus: ${json.status || "?"}\nFehler: ${JSON.stringify(json.errors || json)}`, "err");
+    return;
+  }
+  const cols = json.table.cols || [];
+  const rows = json.table.rows || [];
+  const headers = cols.map((c, i) => `  Spalte ${i} (${String.fromCharCode(65+i)}): "${c.label || "(kein Label)"}"`).join("\n");
+  setStep(out, "6️⃣",
+    `✅ Tabelle gefunden\n• ${cols.length} Spalten\n• ${rows.length} Datensätze\n\nSpalten:\n${headers}`,
+    cols.length > 0 ? "ok" : "warn"
+  );
+
+  // ── Schritt 6: ID suchen ──
+  addStep(out, "7️⃣", `Datensatz mit ID "${testId}" suchen...`, "");
+  if (rows.length === 0) {
+    setStep(out, "7️⃣", `❌ Tabelle hat keine Zeilen!\n\nMögliche Ursache:\n• Tabelle ist leer\n• Nur Überschriften vorhanden`, "err");
+    return;
+  }
+
+  // Show first row raw for debugging
+  const firstRowVals = (rows[0].c || []).map((c, i) => `  [${i}] = ${c ? JSON.stringify(c.v) : "null"}`).join("\n");
+  const found = rows.find(r => r.c && r.c[0] && String(r.c[0].v) === String(testId));
+
+  if (found) {
+    const vals = (found.c || []).map((c, i) => `  ${cols[i]?.label || "Spalte "+i}: ${c ? JSON.stringify(c.v) : "null"}`).join("\n");
+    setStep(out, "7️⃣", `✅ Datensatz gefunden!\n\nInhalt:\n${vals}`, "ok");
+    addStep(out, "✅", "ALLES OK – Datensatz kann geladen werden!", "ok-final");
+    setStep(out, "✅",
+      `Die Verbindung funktioniert einwandfrei.\n\nFalls die index.html trotzdem nicht lädt:\n• Stelle sicher dass SHEET_ID in der index.html korrekt eingetragen ist\n• Prüfe ob ?id=${testId} in der URL steht\n• GitHub Pages Cache: warte 2 Min. oder öffne im Inkognito-Fenster`,
+      "ok"
+    );
+  } else {
+    const allIds = rows.slice(0,10).map(r => r.c && r.c[0] ? String(r.c[0].v) : "null").join(", ");
+    setStep(out, "7️⃣",
+      `⚠️ ID "${testId}" nicht gefunden\n\nVorhandene IDs (erste 10): ${allIds}\n\nErste Zeile der Tabelle:\n${firstRowVals}\n\nTipp: Prüfe ob die ID-Spalte wirklich Zahlen enthält (nicht Text)`,
+      "warn"
+    );
+  }
+}
+
+function addStep(container, icon, title, cls) {
+  const div = document.createElement("div");
+  div.className = "step";
+  div.dataset.icon = icon;
+  div.innerHTML = `<div class="step-title"><span class="icon">${icon}</span> ${title}</div><div class="output ${cls}"></div>`;
+  container.appendChild(div);
+  return div;
+}
+
+function setStep(container, icon, msg, cls, raw) {
+  const steps = container.querySelectorAll(".step");
+  for (const s of steps) {
+    if (s.dataset.icon === icon) {
+      s.querySelector(".step-title").innerHTML = `<span class="icon">${icon}</span> ${msg.split("\n")[0]}`;
+      const out = s.querySelector(".output");
+      out.className = "output " + cls;
+      out.textContent = msg;
+      if (raw) {
+        const pre = document.createElement("div");
+        pre.className = "raw";
+        pre.textContent = raw;
+        s.appendChild(pre);
+      }
+      return;
+    }
+  }
+}
+
+function addRawStep(container, icon, title, raw) {
+  // handled via setStep
+}
+</script>
+</body>
+</html>
