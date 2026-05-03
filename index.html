@@ -509,10 +509,13 @@
         return;
       }
 
-      const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&t=${Date.now()}`;
+      const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json`;
 
       try {
-        const res = await fetch(url);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(url, { mode: 'cors', signal: controller.signal });
+        clearTimeout(timeout);
         if (!res.ok) throw new Error("HTTP " + res.status);
         const text = await res.text();
 
@@ -597,8 +600,13 @@
 
       } catch (err) {
         window._loading = false;
+        const isTimeout = err.name === 'AbortError';
         document.getElementById("error-msg").textContent =
-          "Fehler: " + err.message +
+          isTimeout ? 'Zeitüberschreitung (8 Sek.) – Google Sheets antwortet nicht.
+
+Mögliche Ursachen:
+• Tabelle nicht im Web veröffentlicht
+• Tabellen-ID falsch' : 'Fehler: ' + err.message +
           "\n\n• Tabellen-ID prüfen\n• Tabelle öffentlich freigegeben?\n• Kein Internet?";
         show("state-error");
       }
