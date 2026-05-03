@@ -433,45 +433,28 @@
   </div>
 
   <script>
-    // ═══════════════════════════════════════════════════
-    //  KONFIGURATION – hier anpassen!
-    // ═══════════════════════════════════════════════════
+  <script>
     const CONFIG = {
-      // Deine Google Sheets ID (zwischen /d/ und /edit in der URL):
-      SHEET_ID: 11G6S77WakfCV149o0zr8HTfa8Ppux172ca3yiIrqQhE,
-
-      // Spaltenname, der als Titel/Name angezeigt wird (Spalte B = Index 1):
-      NAME_COLUMN: 1,
-
-      // Spalte mit der ID (Spalte A = Index 0):
-      ID_COLUMN: 0,
-
-      // Spalten, die im Haupt-Card angezeigt werden (Indizes, 0-basiert):
-      // Beispiel: [2,3,4,5,6] zeigt Spalten C bis G
-      MAIN_COLUMNS: [2, 3, 4, 5, 6],
-
-      // Spalten, die im zusätzlichen Bereich angezeigt werden (leer = keine):
-      EXTRA_COLUMNS: [7],
-
-      // Status-Spalte (Index) und Wörter für automatisches Badge-Färben:
-      STATUS_COLUMN: 6,
+      SHEET_ID:     "11G6S77WakfCV149o0zr8HTfa8Ppux172ca3yiIrqQhE",
+      ID_COLUMN:    0,   // A = WerkzeugID
+      NAME_COLUMN:  1,   // B = Werkzeug Name
+      IMAGE_COLUMN: 9,   // J = Bild URL (optional)
+      STATUS_COLUMN: 5,  // F = Status
+      MAIN_COLUMNS:  [2, 3, 4, 5, 6, 7, 8],   // C–I
+      EXTRA_COLUMNS: [10, 11, 12],              // K–M
       STATUS_MAP: {
-        "verfügbar":      "green",
-        "available":      "green",
-        "ok":             "green",
-        "aktiv":          "green",
-        "niedrig":        "amber",
-        "low":            "amber",
-        "achtung":        "amber",
-        "nicht vorrätig": "red",
-        "leer":           "red",
-        "defekt":         "red",
-        "inaktiv":        "red",
-        "out of stock":   "red",
-        "info":           "blue",
+        "funktionstüchtig": "green",
+        "verfügbar":        "green",
+        "ok":               "green",
+        "aktiv":            "green",
+        "in benutzung":     "amber",
+        "ausgeliehen":      "amber",
+        "reserviert":       "amber",
+        "defekt":           "red",
+        "gesperrt":         "red",
+        "inaktiv":          "red",
       }
     };
-    // ═══════════════════════════════════════════════════
 
     function show(id) {
       ["state-loading","state-error","state-noid","state-notfound","state-data"]
@@ -489,14 +472,11 @@
     function makeField(label, value, colIndex) {
       const row = document.createElement("div");
       row.className = "field";
-
       const lbl = document.createElement("span");
       lbl.className = "field-label";
       lbl.textContent = label;
-
       const val = document.createElement("span");
       val.className = "field-value";
-
       if (colIndex === CONFIG.STATUS_COLUMN) {
         const badgeCls = getBadgeClass(value);
         if (badgeCls) {
@@ -510,13 +490,15 @@
       } else {
         val.textContent = value || "—";
       }
-
       row.appendChild(lbl);
       row.appendChild(val);
       return row;
     }
 
     async function loadData() {
+      if (window._loading) return;
+      window._loading = true;
+
       const params = new URLSearchParams(location.search);
       const id = params.get("id");
 
@@ -527,18 +509,6 @@
         return;
       }
 
-      if (CONFIG.SHEET_ID === 11G6S77WakfCV149o0zr8HTfa8Ppux172ca3yiIrqQhE) {
-        document.getElementById("error-msg").textContent =
-          "Konfiguration fehlt: Bitte trage deine Google Sheets ID in der index.html ein.\n" +
-          "(Suche nach DEINE-TABELLEN-ID-HIER-EINTRAGEN)";
-        show("state-error");
-        return;
-      }
-
-      // Prevent any accidental re-entry
-      if (window._loading) return;
-      window._loading = true;
-
       const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&t=${Date.now()}`;
 
       try {
@@ -546,25 +516,23 @@
         if (!res.ok) throw new Error("HTTP " + res.status);
         const text = await res.text();
 
-        // Google wraps response in: google.visualization.Query.setResponse({...});
-        // The prefix length can vary, so we use a regex to extract the JSON safely.
         const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)\s*;?\s*$/);
-        if (!match) throw new Error("Unerwartetes Antwortformat von Google Sheets.\n\nRohantwort (erste 200 Zeichen):\n" + text.slice(0, 200));
+        if (!match) throw new Error("Unerwartetes Antwortformat von Google Sheets.");
         const json = JSON.parse(match[1]);
-        if (!json.table) throw new Error("Keine Tabellendaten in der Antwort.\nStatus: " + (json.status || "unbekannt"));
-        const table = json.table;
-        const headers = table.cols.map(c => c.label || "");
-        const rows = table.rows;
+        if (!json.table) throw new Error("Keine Tabellendaten. Status: " + (json.status || "?"));
 
-        // Find matching row
+        const table  = json.table;
+        const headers = table.cols.map(c => c.label || "");
+        const rows    = table.rows;
+
         const row = rows.find(r => {
-          const cellVal = r.c[CONFIG.ID_COLUMN];
-          return cellVal && String(cellVal.v) === String(id);
+          const cell = r.c[CONFIG.ID_COLUMN];
+          return cell && String(cell.v) === String(id);
         });
 
         if (!row) {
           document.getElementById("notfound-sub").textContent =
-            `ID "${id}" wurde in der Tabelle nicht gefunden.`;
+            `WerkzeugID "${id}" wurde in der Tabelle nicht gefunden.`;
           show("state-notfound");
           return;
         }
@@ -576,11 +544,28 @@
         };
 
         // Header
-        document.getElementById("record-label").textContent = "DATENSATZ · ID " + id;
-        document.getElementById("record-name").textContent = getValue(CONFIG.NAME_COLUMN) || "Kein Name";
-        document.getElementById("record-id").textContent = headers[CONFIG.ID_COLUMN] + ": " + id;
+        document.getElementById("record-label").textContent = "WERKZEUG · ID " + id;
+        document.getElementById("record-name").textContent  = getValue(CONFIG.NAME_COLUMN) || "Kein Name";
+        document.getElementById("record-id").textContent    = "WerkzeugID: " + id;
 
-        // Main fields
+        // Bild (Spalte J) – falls vorhanden
+        const imgUrl = getValue(CONFIG.IMAGE_COLUMN);
+        const extraContainer = document.getElementById("extra-container");
+        extraContainer.innerHTML = "";
+
+        if (imgUrl) {
+          const imgWrap = document.createElement("div");
+          imgWrap.style.cssText = "margin-bottom:1rem;border-radius:14px;overflow:hidden;border:1px solid var(--border);";
+          const img = document.createElement("img");
+          img.src = imgUrl;
+          img.alt = getValue(CONFIG.NAME_COLUMN);
+          img.style.cssText = "width:100%;display:block;max-height:220px;object-fit:cover;";
+          img.onerror = () => imgWrap.remove();
+          imgWrap.appendChild(img);
+          extraContainer.appendChild(imgWrap);
+        }
+
+        // Hauptfelder
         const fieldsMain = document.getElementById("fields-main");
         fieldsMain.innerHTML = "";
         CONFIG.MAIN_COLUMNS.forEach(i => {
@@ -589,24 +574,20 @@
           }
         });
 
-        // Extra fields
-        const extraContainer = document.getElementById("extra-container");
-        extraContainer.innerHTML = "";
+        // Zusatzfelder (Reservierung)
         const extraCols = CONFIG.EXTRA_COLUMNS.filter(i => i < headers.length && getValue(i));
         if (extraCols.length > 0) {
           const box = document.createElement("div");
           box.className = "extra-fields";
           const title = document.createElement("div");
           title.className = "extra-title";
-          title.textContent = "Weitere Informationen";
+          title.textContent = "Reservierung";
           box.appendChild(title);
-          extraCols.forEach(i => {
-            box.appendChild(makeField(headers[i], getValue(i), i));
-          });
+          extraCols.forEach(i => box.appendChild(makeField(headers[i], getValue(i), i)));
           extraContainer.appendChild(box);
         }
 
-        // Timestamp
+        // Zeitstempel
         const now = new Date();
         document.getElementById("timestamp").textContent =
           "Abgerufen am " + now.toLocaleDateString("de-DE") +
@@ -615,14 +596,10 @@
         show("state-data");
 
       } catch (err) {
-        window._loading = false; // allow manual retry via page reload
+        window._loading = false;
         document.getElementById("error-msg").textContent =
-          "Fehler beim Laden der Daten:\n" + err.message +
-          "\n\nMögliche Ursachen:\n" +
-          "• Tabellen-ID falsch eingetragen\n" +
-          "• Tabelle nicht öffentlich freigegeben (Schritt 2 der Anleitung)\n" +
-          "• Tabelle nicht als Webseite veröffentlicht (Schritt 2.2)\n" +
-          "• Kein Internet verfügbar";
+          "Fehler: " + err.message +
+          "\n\n• Tabellen-ID prüfen\n• Tabelle öffentlich freigegeben?\n• Kein Internet?";
         show("state-error");
       }
     }
