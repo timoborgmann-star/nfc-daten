@@ -600,13 +600,9 @@
       } catch (err) {
         window._loading = false;
         const isTimeout = err.name === 'AbortError';
-        document.getElementById("error-msg").textContent =
-          isTimeout ? 'Zeitüberschreitung (8 Sek.) – Google Sheets antwortet nicht.
-
-Mögliche Ursachen:
-• Tabelle nicht im Web veröffentlicht
-• Tabellen-ID falsch' : 'Fehler: ' + err.message +
-          "\n\n• Tabellen-ID prüfen\n• Tabelle öffentlich freigegeben?\n• Kein Internet?";
+        document.getElementById("error-msg").textContent = isTimeout
+          ? "Zeitüberschreitung (8 Sek.) – Google Sheets antwortet nicht.\n\nMögliche Ursachen:\n• Tabelle nicht im Web veröffentlicht\n• Tabellen-ID falsch"
+          : "Fehler: " + err.message + "\n\n• Tabellen-ID prüfen\n• Tabelle öffentlich freigegeben?\n• Kein Internet?";
         show("state-error");
       }
     }
